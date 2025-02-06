@@ -63,7 +63,7 @@ class TopoModel(nn.Module):
     def enforce_connectivity(self):
         self.rnn.enforce_connectivity()
 
-class Run_Model(nn.Module): #(jit.ScriptModule):
+class ModelWrapper(nn.Module): #(jit.ScriptModule):
     def __init__(self, hp, model, logger=None):
         super().__init__()
         self.hp = hp

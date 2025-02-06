@@ -1,4 +1,4 @@
 from .task import generate_trials
 from .train import train, set_hyperparameters
 from . import standard_analysis
-from .model import Run_Model, TopoModel, Model
+from .model import ModelWrapper, TopoModel, Model
