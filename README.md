@@ -13,3 +13,5 @@ Here, we modify the RNN to include spatial and sign-based constraints and to all
 A demo notebook is provided at `multitask_demo.ipynb`, based off of the original repo.
 
 Modified RNN code is found in `ei_rnn.py`. Wiring cost computations are performed within `wiring_cost.py`
+
+Within `wiring_cost.py`, we also include an implementation of the spatially-embedded recurrent neural network (SeRNN) optimization function, along with other alternatives designed to highlight the flexibility of spatial wiring costs. 
