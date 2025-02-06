@@ -14,13 +14,13 @@ import numpy as np
 
 from . import task
 
-
 print_flag = False
 
 
 
 def _gen_feed_dict(trial, hp):
     n_time, batch_size = trial.x.shape[:2]
+    device = hp['device']
     if hp['in_type'] == 'normal':
         pass
     elif hp['in_type'] == 'multi':
@@ -35,9 +35,9 @@ def _gen_feed_dict(trial, hp):
     else:
         raise ValueError()
         
-    trial.x      = torch.tensor(trial.x)
-    trial.y      = torch.tensor(trial.y)
-    trial.c_mask = torch.tensor(trial.c_mask).view(n_time,  batch_size, -1)
+    trial.x      = torch.tensor(trial.x, device=device)
+    trial.y      = torch.tensor(trial.y, device=device)
+    trial.c_mask = torch.tensor(trial.c_mask, device=device).view(n_time,  batch_size, -1)
 
     return trial
 
@@ -74,7 +74,7 @@ def get_default_hp(ruleset):
             'batch_size_test': 512,
             # input type: normal, multi
             'in_type': 'normal',
-            # Type of RNNs: LeakyRNN, LeakyGRU, EILeakyGRU, GRU, LSTM
+            # Type of RNNs: LeakyRNN, LeakyGRU, EILeakyGRU, GRU, LSTM, EIEFF
             'rnn_type': 'LeakyRNN',
             # whether rule and stimulus inputs are represented separately
             'use_separate_input': False,
@@ -106,6 +106,14 @@ def get_default_hp(ruleset):
             'l2_weight': 0,
             # l2 regularization on deviation from initialization
             'l2_weight_init': 0,
+            # spatial regularization weight
+            'spatial_weight': 0,
+            # spatial regularization hparams
+            'spatial_style': 'jj',
+            'spatial_weight_norm': 2,
+            'spatial_dist_norm': 2,
+            # clip gradient norm
+            'clip_grad_norm': 0,
             # proportion of weights to train, None or float between (0, 1)
             'p_weight_train': None,
             # Stopping performance
@@ -133,6 +141,7 @@ def get_default_hp(ruleset):
             # intelligent synapses parameters, tuple (c, ksi)
             'c_intsyn': 0,
             'ksi_intsyn': 0,
+            'device': 'cuda',
             }
 
     return hp
@@ -275,11 +284,16 @@ def train(run_model, optimizer, hp, log):
             rule_train_now = hp['rng'].choice(hp['rule_trains'],   p=hp['rule_probs'])
             
             optim.zero_grad()
-            c_lsq, c_reg, _, _, _ = run_model(rule = rule_train_now, batch_size = hp['batch_size_train'])
-            loss = c_lsq + c_reg
+            c_lsq, c_reg, c_space, _, _, _ = run_model(rule = rule_train_now, batch_size = hp['batch_size_train'])
+            loss = c_lsq + c_reg + c_space
             loss.backward()
+            if hp['clip_grad_norm'] > 0:
+                torch.nn.utils.clip_grad_norm_(run_model.model.parameters(), max_norm=hp['clip_grad_norm'])
             optim.step()
             step += 1
+
+            if hasattr(run_model.model, 'enforce_connectivity'):
+                run_model.model.enforce_connectivity()
 
         except KeyboardInterrupt:
             print("Optimization interrupted by user")
@@ -308,22 +322,24 @@ def do_eval(run_model, log, rule_train):
     for rule_test in hp['rules']:
         n_rep = 16
         batch_size_test_rep = int(hp['batch_size_test']/n_rep)
-        clsq_tmp, creg_tmp, perf_tmp = list(), list(), list()
+        clsq_tmp, creg_tmp, cspace_tmp, perf_tmp = list(), list(), list(), list()
         
         for i_rep in range(n_rep):
             with torch.no_grad():
-                c_lsq, c_reg, y_hat_test, _, trial = run_model(rule = rule_test, batch_size = batch_size_test_rep)
+                c_lsq, c_reg, c_space, y_hat_test, _, trial = run_model(rule = rule_test, batch_size = batch_size_test_rep)
 
             # Cost is first summed over time, and averaged across batch and units. We did the averaging over time through c_mask
             perf_test = np.mean(get_perf(y_hat_test, trial.y_loc))
-            clsq_tmp.append(c_lsq)
-            creg_tmp.append(c_reg)
+            clsq_tmp.append(c_lsq.item())
+            creg_tmp.append(c_reg.item())
+            cspace_tmp.append(c_space.item())
             perf_tmp.append(perf_test)
 
         log['cost_'+rule_test].append(np.mean(clsq_tmp, dtype=np.float64))
         log['creg_'+rule_test].append(np.mean(creg_tmp, dtype=np.float64))
+        log['cspace'].append(np.mean(cspace_tmp, dtype=np.float64))
         log['perf_'+rule_test].append(np.mean(perf_tmp, dtype=np.float64))
-        print('{:15s}'.format(rule_test) + '| cost {:0.6f}'.format(np.mean(clsq_tmp)) + '| c_reg {:0.6f}'.format(np.mean(creg_tmp)) +  '  | perf {:0.2f}'.format(np.mean(perf_tmp)))
+        print('{:15s}'.format(rule_test) + '| cost {:0.6f}'.format(np.mean(clsq_tmp)) + '| c_reg {:0.6f}'.format(np.mean(creg_tmp)) + '| c_space {:0.6f}'.format(np.mean(cspace_tmp)) +  '  | perf {:0.2f}'.format(np.mean(perf_tmp)))
         sys.stdout.flush()
 
     # TODO: This needs to be fixed since now rules are strings
@@ -336,6 +352,11 @@ def do_eval(run_model, log, rule_train):
 
     perf_tests_min = np.min([log['perf_'+r][-1] for r in rule_tmp])
     log['perf_min'].append(perf_tests_min)
+
+    if run_model.logger is not None:
+        this_log = {key: val[-1] for key, val in log.items()}
+        this_log.pop('model_dir')
+        run_model.logger.log(this_log)
 
     # Saving the model
 #     run_model.save()           # Saving not implemented

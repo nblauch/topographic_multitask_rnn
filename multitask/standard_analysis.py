@@ -4,11 +4,12 @@ from __future__ import division
 
 import torch
 import numpy as np
+import seaborn as sns
 import matplotlib.pyplot as plt
 from .task import rule_name 
 from . import tools
 
-def easy_activity_plot(model, rule):
+def easy_activity_plot(model, rule, layer=0):
     """A simple plot of neural activity from one task.
 
     Args:
@@ -20,20 +21,74 @@ def easy_activity_plot(model, rule):
 
     _,_, y_hat, h, trial = model(rule = rule, mode='test')
 
+    if not isinstance(h, list):
+        h = [h]
+    h = h[layer]
+
     # Take only the one example trial
     i_trial = 0
 
-    for activity, title in zip([trial.x, h, y_hat],
-                               ['input', 'recurrent', 'output']):
+    fig, axs = plt.subplots(1,3, figsize=(15,4))
+    for ii, (activity, title) in enumerate(zip([trial.x, h, y_hat],
+                               ['input', 'recurrent', 'output'])):
         if isinstance(activity, torch.Tensor):
             activity = activity.detach().cpu().numpy()
-            
-        plt.figure()
-        plt.imshow(activity[:,i_trial,:].T, aspect='auto', cmap='hot',
-                   interpolation='none', origin='lower')
-        plt.title(title)
-        plt.colorbar()
+
+        print(activity.shape)
+        ax = axs[ii]
+        sns.heatmap(activity[:,i_trial,:].T, cmap='hot', cbar=True, robust=True, ax=ax, square=False)
+        ax.set_title(title)
+    plt.show()
+
+def topo_activity_plot(model, rule, i_trial=0, layer=0):
+    """Plot the activity of the network on a topographic map."""
+    hp = model.hp
+    _,_, y_hat, activity, trial = model(rule = rule, mode='test')
+    coords = model.model.rnn.rnncells[layer].coords
+    nhid = hp['n_rnn']
+        # unit_indices =[(range(nhid), 'E'), (range(nhid, 2*nhid), 'I')]
+    unit_indices = [[range(nhid), 'All']]
+
+    for plot_type in ['std', 'mean']:
+        fig, axs = plt.subplots(1,len(unit_indices), figsize=(5*len(unit_indices),4))
+        if not isinstance(axs, np.ndarray):
+            axs = [axs]
+        for ii, (idx, name) in enumerate(unit_indices):
+            color = activity[:,i_trial,idx].std(0) if plot_type == 'std' else activity[:,i_trial,idx].mean(0)
+            vmin = np.percentile(color, 5)
+            vmax = np.percentile(color, 95)
+            axs[ii].scatter(coords[idx,0], coords[idx,1], c=color, cmap='viridis', vmin=vmin, vmax=vmax)
+            axs[ii].set_title(f'{name} units, {plot_type} over time')
+            plt.colorbar(axs[ii].collections[0], ax=axs[ii])
+            axs[ii].axis('equal')
+        plt.tight_layout()
         plt.show()
+
+def topo_connectivity_plot(model, unit, layer=0, kind='hh'):
+    """Plot the connectivity of the network on a topographic map."""
+    hp = model.hp
+    coords = model.model.rnn.rnncells[layer].coords
+    mults = {'hh': model.model.rnn.rnncells[layer].hid_mult, 'ih': model.model.rnn.rnncells[layer].out_mult}
+    nhid = hp['n_rnn']
+    weights = {}
+    weights['ih'], weights['hh'] = model.model.rnn.rnncells[layer].get_connectivity()
+    if mults[kind] == 2:
+        unit_indices ={ 'E': range(nhid), 'I': range(nhid, mults[kind]*nhid)}
+    else:
+        unit_indices ={ 'All': (range(mults[kind]*nhid))}
+    fig, axs = plt.subplots(1,len(unit_indices), figsize=(5*len(unit_indices),4))
+    if not isinstance(axs, np.ndarray):
+        axs = [axs]
+    for ii, (name, idx) in enumerate(unit_indices.items()):
+        weights_on_unit = weights[kind][unit, idx].detach().cpu().numpy()
+        vmax = np.percentile(abs(weights_on_unit), 95)
+        axs[ii].scatter(coords[idx,0], coords[idx, 1], c=weights_on_unit, cmap='RdBu_r', vmin=-vmax, vmax=vmax)
+        axs[ii].set_title(f'{name}->{unit} connectivity')
+        plt.colorbar(axs[ii].collections[0], ax=axs[ii])
+        axs[ii].axis('equal')
+    plt.tight_layout()
+    plt.show()
+    
 
 
 def easy_connectivity_plot(model):
