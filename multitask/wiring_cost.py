@@ -35,7 +35,8 @@ class SpatialLoss(nn.Module):
                 c_w = torch.abs(weights)**self.weight_norm
             else:
                 # calculate communicability
-                s = torch.diag(torch.pow(torch.sum(torch.abs(weights), dim=1), -0.5))
+                eps = 1e-6
+                s = torch.diag(torch.pow(torch.sum(torch.abs(weights), dim=1) + eps, -0.5))
                 c = torch.linalg.matrix_exp(s@torch.abs(weights))
                 c = c.fill_diagonal_(0)
                 # combine communicability with weights
@@ -48,7 +49,8 @@ class SpatialLoss(nn.Module):
                 c = 0
             else:
                 # calculate communicability
-                s = torch.diag(torch.pow(torch.sum(torch.abs(weights), dim=1), -0.5))
+                eps = 1e-6
+                s = torch.diag(torch.pow(torch.sum(torch.abs(weights), dim=1) + eps, -0.5))
                 c = torch.linalg.matrix_exp(s@torch.abs(weights))
                 c = c.fill_diagonal_(0)
             loss = torch.sum(torch.mul(c**self.weight_norm, dists**self.dist_norm))
