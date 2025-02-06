@@ -264,6 +264,8 @@ def train(run_model, optimizer, hp, log):
 
     optim = optimizer(run_model.model.parameters(), lr=hp['learning_rate'])
 
+    os.makedirs(hp['model_dir'], exist_ok=True)
+
     step = 0
     t_start = time.time()
     while step * hp['batch_size_train'] <= hp['max_steps']:
