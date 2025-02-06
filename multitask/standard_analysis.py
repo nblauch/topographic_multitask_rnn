@@ -19,7 +19,7 @@ def easy_activity_plot(model, rule, layer=0):
 
     hp = model.hp
 
-    _,_, y_hat, h, trial = model(rule = rule, mode='test')
+    _,_,_, y_hat, h, trial = model(rule = rule, mode='test')
 
     if not isinstance(h, list):
         h = [h]
@@ -43,7 +43,7 @@ def easy_activity_plot(model, rule, layer=0):
 def topo_activity_plot(model, rule, i_trial=0, layer=0):
     """Plot the activity of the network on a topographic map."""
     hp = model.hp
-    _,_, y_hat, activity, trial = model(rule = rule, mode='test')
+    _,_,_, y_hat, activity, trial = model(rule = rule, mode='test')
     coords = model.model.rnn.rnncells[layer].coords
     nhid = hp['n_rnn']
         # unit_indices =[(range(nhid), 'E'), (range(nhid, 2*nhid), 'I')]
@@ -135,7 +135,7 @@ def pretty_inputoutput_plot(model, rule, save=False, plot_ylabel=False):
 
     hp = model.hp
 
-    _,_, y_hat, h, trial = model(rule = rule, mode='test')
+    _,_,_, y_hat, h, trial = model(rule = rule, mode='test')
     x = trial.x.detach().cpu().numpy()
     y = trial.y.detach().cpu().numpy()
 
@@ -271,7 +271,7 @@ def pretty_singleneuron_plot(model, # model_dir,
 #         trial = generate_trials(rule, hp, mode='test')
 #         feed_dict = tools.gen_feed_dict(model, trial, hp)
 #         h = sess.run(model.h, feed_dict=feed_dict)
-        _,_, y_hat, h, trial = model(rule = rule, mode='test')
+        _,_,_, y_hat, h, trial = model(rule = rule, mode='test')
         h_tests[rule] = h
 
     for neuron in neurons:
@@ -351,7 +351,7 @@ def activity_histogram(model, # model_dir,
 #         feed_dict = tools.gen_feed_dict(model, trial, hp)
 #         h = sess.run(model.h, feed_dict=feed_dict)
 
-        _,_, y_hat, h, trial = model(rule = rule, mode='test')
+        _,_,_, y_hat, h, trial = model(rule = rule, mode='test')
 
         h = h[t_start:, :, :]
         if h_all is None:
@@ -386,7 +386,7 @@ def schematic_plot(model, rule=None):
 #         feed_dict = tools.gen_feed_dict(model, trial, hp)
 #         x = trial.x
 #         h, y_hat = sess.run([model.h, model.y_hat], feed_dict=feed_dict)
-    _,_, y_hat, h, trial = model(rule = rule, mode='test')
+    _,_,_, y_hat, h, trial = model(rule = rule, mode='test')
     x = trial.x
 
 
