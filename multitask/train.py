@@ -11,6 +11,7 @@ from collections import defaultdict
 import torch
 import math
 import numpy as np
+import os
 
 from . import task
 
@@ -142,6 +143,7 @@ def get_default_hp(ruleset):
             'c_intsyn': 0,
             'ksi_intsyn': 0,
             'device': 'cuda',
+            'checkpoint_step': 500,
             }
 
     return hp
@@ -279,6 +281,10 @@ def train(run_model, optimizer, hp, log):
 
                 if hp['rich_output']:
                     display_rich_output(run_model, step, log, hp['model_dir'])
+
+            # checkpointing
+            if step % hp['checkpoint_step'] == 0:
+                torch.save(run_model.model.state_dict(), os.path.join(hp['model_dir'], f'model.pth'))
 
             # Training
             rule_train_now = hp['rng'].choice(hp['rule_trains'],   p=hp['rule_probs'])
